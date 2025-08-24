@@ -123,19 +123,29 @@
             }
         });
 
-        // Unload button
+        // Unload button (unload one luggage at a time, priority LIFO first)
         document.getElementById('unload').addEventListener('click', () => {
-            console.log("Unloading", placedLuggages.length, "items");
+            if (placedLuggages.length === 0) {
+                console.log("No luggage to unload");
+                return;
+            }
+            // Find the most recent priority luggage (LIFO)
             const priorities = placedLuggages.filter(pl => pl.cell.isPriority);
-            const regulars = placedLuggages.filter(pl => !pl.cell.isPriority);
-            const toUnload = [...priorities].reverse().concat([...regulars].reverse());
-            toUnload.forEach((pl, index) => {
-                setTimeout(() => {
-                    pl.cell.luggage = null;
-                    console.log("Unloaded luggage from:", pl.cell.x, pl.cell.y);
-                }, index * 500);
-            });
-            placedLuggages = [];
+            let luggageToRemove = null;
+            let indexToRemove = -1;
+            if (priorities.length > 0) {
+                // Get the last placed priority luggage
+                luggageToRemove = priorities[priorities.length - 1];
+                indexToRemove = placedLuggages.indexOf(luggageToRemove);
+            } else {
+                // If no priority luggage, get the last placed regular luggage
+                luggageToRemove = placedLuggages[placedLuggages.length - 1];
+                indexToRemove = placedLuggages.length - 1;
+            }
+            // Remove the selected luggage
+            luggageToRemove.cell.luggage = null;
+            placedLuggages.splice(indexToRemove, 1);
+            console.log("Unloaded luggage from:", luggageToRemove.cell.x, luggageToRemove.cell.y, "Priority:", luggageToRemove.cell.isPriority);
         });
 
         // Animation loop
