@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luggage Carousel</title>
+    <style>
+        body { margin: 0; background: #f0f0f0; }
+        canvas { display: block; }
+        #unload {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <button id="unload">Unload</button>
+    <canvas id="canvas" width="1440" height="720"></canvas>
+    <script>
+        console.log("Starting luggage carousel...");
+
+        // Canvas setup
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Storage grid (3x3, in pixels)
+        const storagePositions = [];
+        for (let row = 0; row < 3; row++) {
+            for (let col = 0; col < 3; col++) {
+                storagePositions.push({
+                    x: 600 + col * 80, // X: 600, 680, 760
+                    y: 60 + row * 80,  // Y: 60, 140, 220
+                    luggage: null,
+                    isPriority: row === 0 // Top row (Y=60) is priority
+                });
+            }
+        }
+        console.log("Storage grid initialized:", storagePositions.length, "cells");
+
+        // Luggage management
+        let luggages = [];
+        let placedLuggages = [];
+        let selectedLuggage = null;
+
+        // Spawn luggage
+        function spawnLuggage() {
+            const luggage = {
+                x: 20, // Left edge
+                y: 400 + Math.random() * 220, // Random Y in belt (400 to 620)
+                width: 40,
+                height: 40,
+                color: `rgb(${Math.random() * 255},${Math.random() * 255},${Math.random() * 255})`
+            };
+            luggages.push(luggage);
+            console.log("Spawned luggage at:", luggage.x, luggage.y);
+        }
+        setInterval(spawnLuggage, 1000); // Spawn every 1 second
+
+        // Mouse events
+        function getMousePos(event) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+        }
+
+        canvas.addEventListener('mousedown', (event) => {
+            const pos = getMousePos(event);
+            selectedLuggage = luggages.find(l => 
+                pos.x >= l.x && pos.x <= l.x + l.width &&
+                pos.y >= l.y && pos.y <= l.y + l.height
+            );
+            if (selectedLuggage) {
+                luggages = luggages.filter(l => l !== selectedLuggage);
+                console.log("Picked luggage at:", selectedLuggage.x, selectedLuggage.y);
+            }
+        });
+
+        canvas.addEventListener('mousemove', (event) => {
+            if (selectedLuggage) {
+                const pos = getMousePos(event);
+                selectedLuggage.x = pos.x - selectedLuggage.width / 2;
+                selectedLuggage.y = pos.y - selectedLuggage.height / 2;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (selectedLuggage) {
+                let placed = false;
+                let minDist = Infinity;
+                let targetCell = null;
+                storagePositions.forEach(cell => {
+                    if (!cell.luggage) {
+                        const dist = Math.sqrt(
+                            (selectedLuggage.x + selectedLuggage.width / 2 - cell.x - 40) ** 2 +
+                            (selectedLuggage.y + selectedLuggage.height / 2 - cell.y - 40) ** 2
+                        );
+                        if (dist < minDist) {
+                            minDist = dist;
+                            targetCell = cell;
+                        }
+                    }
+                });
+                if (targetCell && minDist < 50) {
+                    selectedLuggage.x = targetCell.x;
+                    selectedLuggage.y = targetCell.y;
+                    targetCell.luggage = selectedLuggage;
+                    placedLuggages.push({ luggage: selectedLuggage, cell: targetCell });
+                    placed = true;
+                    console.log("Placed luggage at cell:", targetCell.x, targetCell.y, "Priority:", targetCell.isPriority);
+                }
+                if (!placed) {
+                    console.log("Luggage removed (no valid cell)");
+                }
+                selectedLuggage = null;
+            }
+        });
+
+        // Unload button
+        document.getElementById('unload').addEventListener('click', () => {
+            console.log("Unloading", placedLuggages.length, "items");
+            const priorities = placedLuggages.filter(pl => pl.cell.isPriority);
+            const regulars = placedLuggages.filter(pl => !pl.cell.isPriority);
+            const toUnload = [...priorities].reverse().concat([...regulars].reverse());
+            toUnload.forEach((pl, index) => {
+                setTimeout(() => {
+                    pl.cell.luggage = null;
+                    console.log("Unloaded luggage from:", pl.cell.x, pl.cell.y);
+                }, index * 500);
+            });
+            placedLuggages = [];
+        });
+
+        // Animation loop
+        function animate() {
+            // Clear canvas
+            ctx.fillStyle = '#cccccc';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw belt
+            ctx.fillStyle = '#808080';
+            ctx.fillRect(120, 360, 1200, 300);
+
+            // Draw storage grid
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            // Dashed priority row boundary
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(580, 40, 280, 80); // Priority row (Y=60 to 140)
+            ctx.setLineDash([]);
+            // Solid lines for grid
+            for (let y = 140; y <= 300; y += 80) {
+                ctx.beginPath();
+                ctx.moveTo(580, y);
+                ctx.lineTo(860, y);
+                ctx.stroke();
+            }
+            for (let x = 600; x <= 840; x += 80) {
+                ctx.beginPath();
+                ctx.moveTo(x, 40);
+                ctx.lineTo(x, 300);
+                ctx.stroke();
+            }
+
+            // Update and draw luggage
+            luggages.forEach(l => {
+                l.x += 2; // Move right
+                ctx.fillStyle = l.color;
+                ctx.fillRect(l.x, l.y, l.width, l.height);
+            });
+            luggages = luggages.filter(l => l.x < 1320); // Remove off-screen
+
+            // Draw placed luggage
+            placedLuggages.forEach(pl => {
+                ctx.fillStyle = pl.luggage.color;
+                ctx.fillRect(pl.luggage.x, pl.luggage.y, pl.luggage.width, pl.luggage.height);
+            });
+
+            // Draw selected luggage
+            if (selectedLuggage) {
+                ctx.fillStyle = selectedLuggage.color;
+                ctx.fillRect(selectedLuggage.x, selectedLuggage.y, selectedLuggage.width, selectedLuggage.height);
+            }
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+        console.log("Animation loop started");
+    </script>
+</body>
+</html>
